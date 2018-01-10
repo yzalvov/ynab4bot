@@ -25,12 +25,10 @@ var TOKEN_PATH = TOKEN_DIR + 'gmail-nodejs-quickstart.json';
 
 
 
-// Fire up every every hour on 11th second of 11th minute
+// Fire up every every hour on 01th second of 01th minute
 // https://www.npmjs.com/package/node-schedule
 
-let job = schedule.scheduleJob('11 11 * * * *', () => {
-
-  // log('The answer to life, the universe, and everything!')
+let job = schedule.scheduleJob('01 01 * * * *', () => {   // JOB
 
   // Load client secrets from a local file.
   fs.readFile('gmail-client_secret.json', function processClientSecrets(err, data) {
@@ -44,8 +42,7 @@ let job = schedule.scheduleJob('11 11 * * * *', () => {
     authorize(JSON.parse(data), auth => ynb4bot(auth) )
   })
 
-
-})
+})   // JOB
 
 
 
@@ -67,7 +64,7 @@ function ynb4bot (auth) {
   const list = util.promisify(gmail.users.messages.list)
   const get = util.promisify(gmail.users.messages.get)
   const modify = util.promisify(gmail.users.messages.modify)
-  const query = 'in:inbox is:unread subject:"Транзакция по банковской карте ВТБ24"'
+  const query = 'in:inbox is:unread from:notify@vtb24.ru OR from:notify@vtb24.ru "произведена транзакция"'
 
   // Get an array of bank messages via Gmail, break if no messages.
   // Set current ynab settings via Dropbox to an object (path and last tx ver).
@@ -111,7 +108,7 @@ function ynb4bot (auth) {
   
   .then( resArr => {
     if ( !resArr ) {
-      log ( '==== NO TX EMAILS FOUND ====' )
+      log ( `==== NO TX EMAILS FOUND @ ${(new Date()).toISOString().split('.')[0]}Z ====` )
       return
     }
 
@@ -163,21 +160,23 @@ function ynb4bot (auth) {
 function dbxWriteFiles ( fileArr ) {
   // start waiting
   let chain = Promise.resolve({
-      // name: `\n==== Chain of ${fileArr.length-1}+1 (A.device) is kicked off at ${(new Date()).toISOString().split('.')[0]}Z >>>>`,
-      // server_modified: '\n'
+      name: `\n==== Chain of ${fileArr.length-1}+1 (A.device) is kicked off @ ${(new Date()).toISOString().split('.')[0]}Z ====`,
+      server_modified: ''
   })
   // build a promise chain in the loop
   for ( const file of fileArr ) {
+    // const logline = `${file.body.publishTime.slice(0, 10)} ${file.body.items[0].memo} ${file.body.items[0].amount}`
     const body = JSON.stringify(file.body)
     chain = chain.then( res => {
-      // log ( `${res.name} ${res.server_modified}` )
+      // log ( `${logline} // ${res.name} ${res.server_modified}` )
+      log ( `${res.name} ${res.server_modified}` )
       return dbx.filesUpload({path: `${file.path}${file.name}`, contents:body, mode:'overwrite'})
     })
   }
   // log for the last file
   chain.then(res => {
-    // log ( `${res.name} ${res.server_modified}` )
-    // log ( `\n>>>> chain of ${fileArr.length-1}+1 (A.device) is Dropbox'd at ${(new Date()).toISOString().split('.')[0]}Z ====\n` )
+    log ( `${res.name} ${res.server_modified}` )
+    log ( `==== chain of ${fileArr.length-1}+1 (A.device) is Dropbox'd @ ${(new Date()).toISOString().split('.')[0]}Z ====\n` )
   })
       // error catcher for the chain
       .catch(err => console.error(err))
@@ -209,19 +208,19 @@ function readDbxToken(filename) {
 // currency converter via fixer.io
 function toRUB(tx) {
     if (['RUR', 'RUB'].includes(tx.currency)) {
-        tx.memo = `${tx.card}  ${tx.place}  --  `
+        tx.memo = `${tx.time}  --  ${tx.card}  ${tx.place}  --  `
         tx.spentRUB = tx.amount
+
         return tx
     } else {
-        tx.memo = `${tx.currency} ${tx.amount}  --  ${tx.card} ${tx.place}  --  `
+        tx.memo = `${tx.time}  --  ${tx.currency} ${tx.amount}  --  ${tx.card}  ${tx.place}  --  `
 
         return fxr.base(tx.currency)
-            .then((res) => {
+            .then( res  => {
                 tx.spentRUB = tx.amount * res.rates.RUB
 
                 return tx
-            })
-            .catch(err => log(err))
+            }).catch(err => log(err))
     }
 }
 
@@ -361,6 +360,7 @@ function parseMessage ( msg ) {
   const date = body.slice( aim1idx-21, aim1idx-11 ).split('.').reverse().join('-')
   detailsObj.publishTime = `${date} ${time}`
   detailsObj.card = body.slice( aim1idx + aim1.length, aim1idx + aim1.length + 5 )
+  detailsObj.time = time.slice(0, 5)
 
   const start2 = 'на сумму '
   const end2 = '.\r'
