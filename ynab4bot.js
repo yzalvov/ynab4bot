@@ -64,7 +64,7 @@ function ynb4bot (auth) {
   const list = util.promisify(gmail.users.messages.list)
   const get = util.promisify(gmail.users.messages.get)
   const modify = util.promisify(gmail.users.messages.modify)
-  const query = 'in:inbox is:unread from:notify@vtb24.ru OR from:notify@vtb24.ru "произведена транзакция"'
+  const query = 'in:inbox is:unread from:notify@vtb24.ru OR from:notify@vtb.ru "произведена транзакция"'
 
   // Get an array of bank messages via Gmail, break if no messages.
   // Set current ynab settings via Dropbox to an object (path and last tx ver).
