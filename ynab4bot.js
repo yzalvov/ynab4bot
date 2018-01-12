@@ -12,8 +12,6 @@ const fxr = require('fixer-io-node')
 const schedule = require('node-schedule')
 
 
-
-
 // If modifying these scopes, delete your previously saved credentials
 // at ~/.credentials/gmail-nodejs-quickstart.json
 // var SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
@@ -21,8 +19,6 @@ var SCOPES = ['https://mail.google.com/'];
 var TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH ||
     process.env.USERPROFILE) + '/.credentials/';
 var TOKEN_PATH = TOKEN_DIR + 'gmail-nodejs-quickstart.json';
-
-
 
 
 // Fire up every every hour on 01th second of 01th minute
@@ -47,6 +43,8 @@ let job = schedule.scheduleJob('01 01 * * * *', () => {   // JOB
 
 
 // ########### YNAB 4 BOT #######################################################
+// Reads bank transaction notifications via Gmail.
+// Adds those TXs to the YNAB4 card account via Dropbox API.
 let dbx
 readDbxToken('dropbox-secret.json')
     .then(res => {
@@ -182,17 +180,6 @@ function dbxWriteFiles ( fileArr ) {
       .catch(err => console.error(err))
 }
 
-
-function dbxWriteFile ( file, dir ) {
-  const body = JSON.stringify(file.body)
-  dbx.filesUpload({path: `${dir}${file.name}`, contents:body, mode:'overwrite'})
-  .then( res => {
-    log( res )
-  })
-  .catch( err => console.error(err))
-}
-
-
 // read Dropbox token from a file
 function readDbxToken(filename) {
     return new Promise((resolve, reject) => {
@@ -208,12 +195,12 @@ function readDbxToken(filename) {
 // currency converter via fixer.io
 function toRUB(tx) {
     if (['RUR', 'RUB'].includes(tx.currency)) {
-        tx.memo = `${tx.time}  --  ${tx.card}  ${tx.place}  --  `
+        tx.memo = `${tx.time}  --  ${tx.place}  --  `
         tx.spentRUB = tx.amount
 
         return tx
     } else {
-        tx.memo = `${tx.time}  --  ${tx.currency} ${tx.amount}  --  ${tx.card}  ${tx.place}  --  `
+        tx.memo = `${tx.time}  --  ${tx.currency} ${tx.amount}  --  ${tx.place}  --  `
 
         return fxr.base(tx.currency)
             .then( res  => {
@@ -261,7 +248,7 @@ function txFileObj(tx, i, lasVer) {
                       "items": [
                       {
                         "importedPayee": null,
-                        "checkNumber": null,
+                        "checkNumber": "${tx.card}",
                         "accepted": true,
                         "transferTransactionId": null,
                         "categoryId": null,
@@ -355,12 +342,12 @@ function parseMessage ( msg ) {
   const body = Buffer.from(msg.payload.body.data, 'base64').toString('utf8')
   const detailsObj = {}
 
-  const aim1 = ' по Вашей банковской карте '
+  const aim1 = ' по Вашей банковской карте *'
   const aim1idx = body.indexOf( aim1 )
   const time = body.slice( aim1idx-8, aim1idx )
   const date = body.slice( aim1idx-21, aim1idx-11 ).split('.').reverse().join('-')
   detailsObj.publishTime = `${date} ${time}`
-  detailsObj.card = body.slice( aim1idx + aim1.length, aim1idx + aim1.length + 5 )
+  detailsObj.card = body.slice( aim1idx + aim1.length, aim1idx + aim1.length + 4 )
   detailsObj.time = time.slice(0, 5)
 
   const start2 = 'на сумму '
