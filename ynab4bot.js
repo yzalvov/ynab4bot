@@ -28,7 +28,7 @@ var TOKEN_PATH = TOKEN_DIR + 'gmail-nodejs-quickstart.json';
 // Fire up every every hour on 01th second of 01th minute
 // https://www.npmjs.com/package/node-schedule
 
-// let job = schedule.scheduleJob('01 01 * * * *', () => {   // JOB
+let job = schedule.scheduleJob('01 01 * * * *', () => {   // JOB
 
   // Load client secrets from a local file.
   fs.readFile('gmail-client_secret.json', function processClientSecrets(err, data) {
@@ -42,7 +42,7 @@ var TOKEN_PATH = TOKEN_DIR + 'gmail-nodejs-quickstart.json';
     authorize(JSON.parse(data), auth => ynb4bot(auth) )
   })
 
-// })   // JOB
+})   // JOB
 
 
 
