@@ -51,10 +51,10 @@ readDbxToken('dropbox-secret.json')
         dbx = new Dropbox({ accessToken: res })
     }).catch(err => log(err))
 
-const dbxDir = '2017mynabudget~2abc00c2.ynab4'
+const dbxDir = '2018mynabudget~2abc00c2.ynab4'
 const dbxRefFile = 'Budget.ymeta'
-const botGUID = '983D75AD-340A-5F0C-EB52-FE31084A4F42'
-const botShortId = 'A'
+const botGUID = 'F97D0907-4C96-4C86-877F-894CFD44EE62'
+const botShortId = 'C'
 
 
 function ynb4bot (auth) {
@@ -133,7 +133,7 @@ function ynb4bot (auth) {
     const dir = ynbInitObj.path
 
     for (const [i, tx] of txArr.entries()) {
-      const txFile = txFileObj( tx, i, ynbInitObj.lastVer )
+      const txFile = txFileObj( tx, i, ynbInitObj )
       txFile.path = `${dir}${botGUID}/`
       fileArr.push( txFile )
       
@@ -147,7 +147,7 @@ function ynb4bot (auth) {
         fileArr.push( deviceFile )
       }
     }
-    
+
     dbxWriteFiles ( fileArr )
   
   }).catch( err => console.log(err) )
@@ -158,7 +158,7 @@ function ynb4bot (auth) {
 function dbxWriteFiles ( fileArr ) {
   // start waiting
   let chain = Promise.resolve({
-      name: `\n==== Chain of ${fileArr.length-1}+1 (A.device) is kicked off @ ${(new Date()).toISOString().split('.')[0]}Z ====`,
+      name: `\n==== Chain of ${fileArr.length-1}+1 (${botShortId}.device) is kicked off @ ${(new Date()).toISOString().split('.')[0]}Z ====`,
       server_modified: ''
   })
   // build a promise chain in the loop
@@ -174,7 +174,7 @@ function dbxWriteFiles ( fileArr ) {
   // log for the last file
   chain.then(res => {
     log ( `${res.name} ${res.server_modified}` )
-    log ( `==== chain of ${fileArr.length-1}+1 (A.device) is Dropbox'd @ ${(new Date()).toISOString().split('.')[0]}Z ====\n` )
+    log ( `==== chain of ${fileArr.length-1}+1 (${botShortId}.device) is Dropbox'd @ ${(new Date()).toISOString().split('.')[0]}Z ====\n` )
   })
       // error catcher for the chain
       .catch(err => console.error(err))
@@ -234,15 +234,15 @@ function deviceFileObj (knowledge) {
     return JSON.parse(fileStr)
 }
 
-function txFileObj(tx, i, lasVer) {
-  const txPostfxArr = lasVer.split(',')
-  const txLastIdx = txPostfxArr.shift().split('-')[1] * 1
-  const txVer = txLastIdx + i
+function txFileObj(tx, i, ynbInitObj) {
+  const txPostfxArr = ynbInitObj.lastVer.split(',')
+  const txLastIdx = txPostfxArr.pop().split('-')[1] * 1
+  const txVer = txLastIdx + i // 'i' is 0 for the first tx in the chain
   const txPostfxStr = txPostfxArr.join(',')
-  const startVer = `A-${txVer},${txPostfxStr}`
+  const startVer = `${txPostfxStr},${botShortId}-${txVer}`
 
   const fileStr = `{
-                    "name": "${startVer}_A-${(txVer + 1)}.ydiff",
+                    "name": "${startVer}_${botShortId}-${(txVer + 1)}.ydiff",
                     "body": {
                       "dataVersion": "4.2",
                       "items": [
@@ -270,9 +270,9 @@ function txFileObj(tx, i, lasVer) {
                       }],
                       "publishTime": "${tx.publishTime}",
                       "deviceGUID": "${botGUID}",
-                      "endVersion": "${botShortId}-${txVer + 1},${txPostfxStr}",
+                      "endVersion": "${txPostfxStr},${botShortId}-${txVer + 1}",
                       "shortDeviceId": "${botShortId}",
-                      "budgetDataGUID": "data3-0EA9922C",
+                      "budgetDataGUID": "${ynbInitObj.budgetDataGUID}",
                       "budgetGUID": "/Apps/ynab4bot/${dbxDir}",
                       "startVersion": "${startVer}"
                     }
@@ -287,10 +287,11 @@ function readYnabFromDbx() {
         .then(res => {
             const ynabDataPath = JSON.parse(res.fileBinary).relativeDataFolderName
             ballObj.path = `/${dbxDir}/${ynabDataPath}/`
-            return lastYdiffPath(dbx, ballObj.path)
+            ballObj.budgetDataGUID = ynabDataPath
+            return lastYdiffPath(ballObj.path)
         })
         .then(res => {
-            return ynbEndVer(dbx, res)
+            return ynbEndVer(res)
         })
         .then(res => {
             ballObj.lastVer = res
@@ -299,26 +300,27 @@ function readYnabFromDbx() {
         .catch(err => console.log(err))
 }
 
-function ynbEndVer(dbx, ypath) {
+function ynbEndVer(ypath) {
     return dbx.filesDownload({ path: ypath })
-        .then(resp => {
-            return JSON.parse(resp.fileBinary).endVersion
+        .then(res => {
+            return JSON.parse(res.fileBinary).endVersion
         })
         .catch(err => console.log(err))
 }
 
-function lastYdiffPath(dbx, ypath) {
-    // return dbx.filesListFolder({path: ypath})
+function lastYdiffPath(ypath) {
     return dbx.filesListFolder({ path: ypath })
-        .then(resp => {
-            // let recentYdiffs = []
+        .then(res => {
             const recentYdiffs = []
-            for (const folder of resp.entries) {
+            for (const folder of res.entries) {
+                // skip the 'device' folder as there's no .ydiff files
                 if (folder.name === 'devices') { continue }
-                recentYdiffs.push(folderLastYdiff(dbx, ypath, folder))
+                recentYdiffs.push( folderLastYdiff(ypath, folder) )
             }
 
-            return Promise.all(recentYdiffs).then(recentYdiffs => {
+
+            return Promise.all(recentYdiffs).then( res => {
+                const recentYdiffs = res.filter( e => e !== undefined )
                 const recentYdiffsMap = new Map(recentYdiffs)
                 const lastDate = [...recentYdiffsMap.keys()].sort().pop()
                 // log ( recentYdiffsMap.get(lastDate) )
@@ -328,11 +330,13 @@ function lastYdiffPath(dbx, ypath) {
         }).catch(err => console.log(err) )
 }
 
-function folderLastYdiff (dbx, ypath, folder) {
+function folderLastYdiff (ypath, folder) {
      return dbx.filesListFolder({ path: ypath + folder.name })
-        .then(resp => {
-            const recentFirstArr = resp.entries.reverse()
+        .then(res => {
+            if ( res.entries.length === 0 ) { return } // skip empty folder
+            const recentFirstArr = res.entries.reverse()
             const lastYdiff = recentFirstArr.find( e => e.name.includes('.ydiff') )
+            if ( !lastYdiff ) { return } // return nothing if there's no .ydiff file found
             return [Date.parse(lastYdiff.client_modified), `${ypath+folder.name}/${lastYdiff.name}`]
 
         }).catch(err => console.log(err))
