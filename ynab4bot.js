@@ -35,6 +35,7 @@ let job = schedule.scheduleJob('01 01 * * * *', () => {   // JOB
     // Authorize a client with the loaded credentials, then call the
     // Gmail API.
     // authorize(JSON.parse(data), listLabels);
+    // log ( 'gmail-client_secret.json: ' + data )
     authorize(JSON.parse(data), auth => ynb4bot(auth) )
   })
 
@@ -187,6 +188,7 @@ function readDbxToken(filename) {
             if (err) {
                 reject('Error loading client secret file: ' + err)
             }
+            // log ( 'dropbox-secret.json: ' + data )
             resolve(JSON.parse(data).accessToken)
         })
     })
