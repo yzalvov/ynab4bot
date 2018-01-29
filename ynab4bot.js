@@ -183,7 +183,7 @@ function dbxWriteFiles ( fileArr ) {
 // read Dropbox token from a file
 function readDbxToken(filename) {
     return new Promise((resolve, reject) => {
-        fs.readFile(filename, (err, data) => {
+        fs.readFile(filename, 'utf8', (err, data) => {
             if (err) {
                 reject('Error loading client secret file: ' + err)
             }
