@@ -189,6 +189,7 @@ function readDbxToken(filename) {
                 reject('Error loading client secret file: ' + err)
             }
             // log ( 'dropbox-secret.json: ' + data )
+            // log ( 'accessToken: ' + JSON.parse(data).accessToken )
             resolve(JSON.parse(data).accessToken)
         })
     })
