@@ -8,8 +8,9 @@ const log = console.log.bind(console)
 const Dropbox = require('dropbox')
 const uuidv4 = require('uuid/v4')
 const util = require('util')
-const fxr = require('fixer-io-node')
 const schedule = require('node-schedule')
+const fx = require('money')
+const fetch = require('node-fetch')
 
 
 // If modifying these scopes, delete your previously saved credentials
@@ -47,9 +48,11 @@ let job = schedule.scheduleJob('01 01 * * * *', () => {   // JOB
 // Reads bank transaction notifications via Gmail.
 // Adds those TXs to the YNAB4 card account via Dropbox API.
 let dbx
-readDbxToken('dropbox-secret.json')
+let fixerToken
+readTokens('secrets.json')
     .then(res => {
-        dbx = new Dropbox({ accessToken: res })
+        dbx = new Dropbox({ accessToken: res.dropbox })
+        fixerToken = res.fixer
     }).catch(err => log(err))
 
 const dbxDir = '2018mynabudget~2abc00c2.ynab4'
@@ -182,7 +185,7 @@ function dbxWriteFiles ( fileArr ) {
 }
 
 // read Dropbox token from a file
-function readDbxToken(filename) {
+function readTokens(filename) {
     return new Promise((resolve, reject) => {
         fs.readFile(filename, 'utf8', (err, data) => {
             if (err) {
@@ -190,7 +193,7 @@ function readDbxToken(filename) {
             }
             // log ( 'dropbox-secret.json: ' + data )
             // log ( 'accessToken: ' + JSON.parse(data).accessToken )
-            resolve(JSON.parse(data).accessToken)
+            resolve(JSON.parse(data))
         })
     })
 }
@@ -205,12 +208,14 @@ function toRUB(tx) {
     } else {
         tx.memo = `${tx.time}  --  ${tx.currency} ${tx.amount}  --  ${tx.place}  --  `
 
-        return fxr.base(tx.currency)
-            .then( res  => {
-                tx.spentRUB = tx.amount * res.rates.RUB
-
-                return tx
-            }).catch(err => log(err))
+        return fetch(`http://data.fixer.io/api/latest?access_key=${fixerToken}`)
+          .then((resp) => resp.json())
+          .then((data) => fx.rates = data.rates)
+          .then( () => {
+            const amount = fx(tx.amount).from(tx.currency).to('RUB')
+            tx.spentRUB = amount.toFixed(2)
+            return tx
+          }).catch(err => log(err))
     }
 }
 
@@ -280,7 +285,7 @@ function txFileObj(tx, i, ynbInitObj) {
                       "startVersion": "${startVer}"
                     }
                   }`
-
+                  
     return JSON.parse(fileStr)
 }
 
@@ -371,7 +376,7 @@ function parseMessage ( msg ) {
   const start3idx = body.indexOf( start3 )
   const end3idx = start3idx + start3.length + 100
   const str3 = body.slice( start3idx, end3idx )
-  detailsObj.place = str3.slice( start3.length, str3.indexOf( end3 ) ).replace(/(&amp;)(quot;)/gi, '')
+  detailsObj.place = str3.slice( start3.length, str3.indexOf( end3 ) ).split('"').join('')
 
   return detailsObj
 }
