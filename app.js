@@ -12,7 +12,6 @@ const schedule = require('node-schedule')
 const fx = require('money')
 const fetch = require('node-fetch')
 
-
 // If modifying these scopes, delete your previously saved credentials
 // at ~/.credentials/gmail-nodejs-quickstart.json
 // var SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
@@ -22,10 +21,12 @@ var TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH ||
 var TOKEN_PATH = TOKEN_DIR + 'gmail-nodejs-quickstart.json';
 
 
-// Fire up every every hour on 01th second of 01th minute
-// https://www.npmjs.com/package/node-schedule
 
-let job = schedule.scheduleJob('01 01 * * * *', () => {   // JOB
+// <<< JOB START  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+let job = schedule.scheduleJob('01 01 * * * *', () => {
+
+  // Fire up every every hour on 01th second of 01th minute
+  // https://www.npmjs.com/package/node-schedule
 
   // Load client secrets from a local file.
   fs.readFile('gmail-client_secret.json', function processClientSecrets(err, data) {
@@ -40,7 +41,8 @@ let job = schedule.scheduleJob('01 01 * * * *', () => {   // JOB
     authorize(JSON.parse(data), auth => ynb4bot(auth) )
   })
 
-})   // JOB
+})   
+// JOB END >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
 
@@ -66,48 +68,48 @@ function ynb4bot (auth) {
   const list = util.promisify(gmail.users.messages.list)
   const get = util.promisify(gmail.users.messages.get)
   const modify = util.promisify(gmail.users.messages.modify)
-  const query = 'in:inbox is:unread from:notify@vtb24.ru OR from:notify@vtb.ru "произведена транзакция"'
+  const query = 'in:inbox is:unread from:notify@vtb.ru "произведена транзакция" +"втб"'
 
   // Get an array of bank messages via Gmail, break if no messages.
   // Set current ynab settings via Dropbox to an object (path and last tx ver).
-  
+
   list({
-      auth: auth,
-      userId: 'me',
-      q: query
+    auth: auth,
+    userId: 'me',
+    q: query
   })
   .then( lst => {
-    if ( !lst.resultSizeEstimate ) { return }
+    if ( !lst.resultSizeEstimate )
+      return
+      
     // log( lst.messages )
-    
     const ynbInitObj = readYnabFromDbx()
     const msgPrsArr = []
-    
+
     for (const message of lst.messages) {
-      
       const msgPromise = get({
-          auth: auth,
-          userId: 'me',
-          id: message.id
+        auth: auth,
+        userId: 'me',
+        id: message.id
       })
-      
+
       msgPrsArr.push( msgPromise )
 
       modify({
-          auth: auth,
-          userId: 'me',
-          id: message.id,
-          resource: {
-            removeLabelIds: [ 'UNREAD', 'INBOX' ]
+        auth: auth,
+        userId: 'me',
+        id: message.id,
+        resource: {
+          removeLabelIds: [ 'UNREAD', 'INBOX' ]
           }
       })
-    
+
     }
 
     return Promise.all( [ ynbInitObj, ...msgPrsArr] )
 
   })
-  
+
   .then( resArr => {
     if ( !resArr ) {
       log ( `==== NO TX EMAILS FOUND @ ${(new Date()).toISOString().split('.')[0]}Z ====` )
@@ -120,10 +122,12 @@ function ynb4bot (auth) {
     const txPromiseArr = []
 
     // reverse to ascend chrono order
-    for (const msg of msgArr.reverse()) {      
+    for (const msg of msgArr.reverse()) {   
+      // console.log( parseMessage( msg ) )   
       const tx = toRUB( parseMessage( msg ) )
       txPromiseArr.push ( tx )
     }
+    // return
 
     return Promise.all( [ ynbInitObj, ...txPromiseArr ] )
 
@@ -140,9 +144,10 @@ function ynb4bot (auth) {
       const txFile = txFileObj( tx, i, ynbInitObj )
       txFile.path = `${dir}${botGUID}/`
       fileArr.push( txFile )
-      
+
       // log ( txFile.body.items[0].memo )
-      
+      // log ( txFile.body.items[0] )
+
       if ( i === txArr.length-1 ) {
         const botKnowledge = txFile.body.endVersion
 
@@ -153,7 +158,7 @@ function ynb4bot (auth) {
     }
 
     dbxWriteFiles ( fileArr )
-  
+
   }).catch( err => console.log(err) )
 }
 
@@ -219,8 +224,6 @@ function toRUB(tx) {
     }
 }
 
-
-
 function deviceFileObj (knowledge) {
     const fileStr = `{
       "name": "${botShortId}.ydevice",
@@ -250,133 +253,130 @@ function txFileObj(tx, i, ynbInitObj) {
   const startVer = `${txPostfxStr},${botShortId}-${txVer}`
 
   const fileStr = `{
-                    "name": "${startVer}_${botShortId}-${(txVer + 1)}.ydiff",
-                    "body": {
-                      "dataVersion": "4.2",
-                      "items": [
-                      {
-                        "importedPayee": null,
-                        "checkNumber": "${tx.card}",
-                        "accepted": true,
-                        "transferTransactionId": null,
-                        "categoryId": null,
-                        "amount": ${-tx.spentRUB},
-                        "subTransactions": [],
-                        "memo": "${tx.memo}",
-                        "payeeId": null,
-                        "targetAccountId": null,
-                        "flag": "Purple",
-                        "isTombstone": false,
-                        "date": "${tx.publishTime.split(' ')[0]}",
-                        "dateEnteredFromSchedule": null,
-                        "entityVersion": "${botShortId}-${(txVer + 1)}",
-                        "entityType": "transaction",
-                        "cleared": "Uncleared",
-                        "madeWithKnowledge": null,
-                        "accountId": "38BD3739-107E-6B63-AFBE-536BC6BD0414",
-                        "entityId": "${uuidv4().toUpperCase()}"
-                      }],
-                      "publishTime": "${tx.publishTime}",
-                      "deviceGUID": "${botGUID}",
-                      "endVersion": "${txPostfxStr},${botShortId}-${txVer + 1}",
-                      "shortDeviceId": "${botShortId}",
-                      "budgetDataGUID": "${ynbInitObj.budgetDataGUID}",
-                      "budgetGUID": "/Apps/ynab4bot/${dbxDir}",
-                      "startVersion": "${startVer}"
-                    }
-                  }`
-                  
-    return JSON.parse(fileStr)
+    "name": "${startVer}_${botShortId}-${(txVer + 1)}.ydiff",
+    "body": {
+      "dataVersion": "4.2",
+      "items": [
+      {
+        "importedPayee": null,
+        "checkNumber": "${tx.card}",
+        "accepted": true,
+        "transferTransactionId": null,
+        "categoryId": null,
+        "amount": ${-tx.spentRUB},
+        "subTransactions": [],
+        "memo": "${tx.memo}",
+        "payeeId": null,
+        "targetAccountId": null,
+        "flag": "Purple",
+        "isTombstone": false,
+        "date": "${tx.publishTime.split(' ')[0]}",
+        "dateEnteredFromSchedule": null,
+        "entityVersion": "${botShortId}-${(txVer + 1)}",
+        "entityType": "transaction",
+        "cleared": "Uncleared",
+        "madeWithKnowledge": null,
+        "accountId": "38BD3739-107E-6B63-AFBE-536BC6BD0414",
+        "entityId": "${uuidv4().toUpperCase()}"
+      }],
+      "publishTime": "${tx.publishTime}",
+      "deviceGUID": "${botGUID}",
+      "endVersion": "${txPostfxStr},${botShortId}-${txVer + 1}",
+      "shortDeviceId": "${botShortId}",
+      "budgetDataGUID": "${ynbInitObj.budgetDataGUID}",
+      "budgetGUID": "/Apps/ynab4bot/${dbxDir}",
+      "startVersion": "${startVer}"
+    }
+  }`
+
+  return JSON.parse(fileStr)
 }
 
 function readYnabFromDbx() {
-    const ballObj = {}
-    return dbx.filesDownload({ path: `/${dbxDir}/${dbxRefFile}` })
-        .then(res => {
-            const ynabDataPath = JSON.parse(res.fileBinary).relativeDataFolderName
-            ballObj.path = `/${dbxDir}/${ynabDataPath}/`
-            ballObj.budgetDataGUID = ynabDataPath
-            return lastYdiffPath(ballObj.path)
-        })
-        .then(res => {
-            return ynbEndVer(res)
-        })
-        .then(res => {
-            ballObj.lastVer = res
-            return ballObj
-        })
-        .catch(err => console.log(err))
+  const ballObj = {}
+  return dbx.filesDownload({ path: `/${dbxDir}/${dbxRefFile}` })
+    .then(res => {
+        const ynabDataPath = JSON.parse(res.fileBinary).relativeDataFolderName
+        ballObj.path = `/${dbxDir}/${ynabDataPath}/`
+        ballObj.budgetDataGUID = ynabDataPath
+        return lastYdiffPath(ballObj.path)
+    })
+    .then(res => {
+        return ynbEndVer(res)
+    })
+    .then(res => {
+        ballObj.lastVer = res
+        return ballObj
+    })
+    .catch(err => console.log(err))
 }
 
 function ynbEndVer(ypath) {
-    return dbx.filesDownload({ path: ypath })
-        .then(res => {
-            return JSON.parse(res.fileBinary).endVersion
-        })
-        .catch(err => console.log(err))
+  return dbx.filesDownload({ path: ypath })
+    .then(res => {
+        return JSON.parse(res.fileBinary).endVersion
+    })
+    .catch(err => console.log(err))
 }
 
 function lastYdiffPath(ypath) {
-    return dbx.filesListFolder({ path: ypath })
-        .then(res => {
-            const recentYdiffs = []
-            for (const folder of res.entries) {
-                // skip the 'device' folder as there's no .ydiff files
-                if (folder.name === 'devices') { continue }
-                recentYdiffs.push( folderLastYdiff(ypath, folder) )
-            }
+  return dbx.filesListFolder({ path: ypath })
+    .then(res => {
+      const recentYdiffs = []
+      for (const folder of res.entries) {
+        // skip the 'device' folder as there's no .ydiff files
+        if (folder.name === 'devices') { continue }
+        recentYdiffs.push( folderLastYdiff(ypath, folder) )
+      }
 
-
-            return Promise.all(recentYdiffs).then( res => {
-                const recentYdiffs = res.filter( e => e !== undefined )
-                const recentYdiffsMap = new Map(recentYdiffs)
-                const lastDate = [...recentYdiffsMap.keys()].sort().pop()
-                // log ( recentYdiffsMap.get(lastDate) )
-                return recentYdiffsMap.get(lastDate)
-            })
-
+      return Promise.all(recentYdiffs)
+        .then( res => {
+          const recentYdiffs = res.filter( e => e !== undefined )
+          const recentYdiffsMap = new Map(recentYdiffs)
+          const lastDate = [...recentYdiffsMap.keys()].sort().pop()
+          // log ( recentYdiffsMap.get(lastDate) )
+          return recentYdiffsMap.get(lastDate)
+          })
         }).catch(err => console.log(err) )
 }
 
 function folderLastYdiff (ypath, folder) {
-     return dbx.filesListFolder({ path: ypath + folder.name })
-        .then(res => {
-            if ( res.entries.length === 0 ) { return } // skip empty folder
-            const recentFirstArr = res.entries.reverse()
-            const lastYdiff = recentFirstArr.find( e => e.name.includes('.ydiff') )
-            if ( !lastYdiff ) { return } // return nothing if there's no .ydiff file found
-            return [Date.parse(lastYdiff.client_modified), `${ypath+folder.name}/${lastYdiff.name}`]
+   return dbx.filesListFolder({ path: ypath + folder.name })
+    .then(res => {
+        if ( res.entries.length === 0 ) { return } // skip empty folder
+        const recentFirstArr = res.entries.reverse()
+        const lastYdiff = recentFirstArr.find( e => e.name.includes('.ydiff') )
+        if ( !lastYdiff ) { return } // return nothing if there's no .ydiff file found
+        
+        return [Date.parse(lastYdiff.client_modified), `${ypath+folder.name}/${lastYdiff.name}`]
 
-        }).catch(err => console.log(err))
+    }).catch(err => console.log(err))
 }
 
 function parseMessage ( msg ) {
   const body = Buffer.from(msg.payload.body.data, 'base64').toString('utf8')
   const detailsObj = {}
-
-  const aim1 = ' по Вашей банковской карте *'
-  const aim1idx = body.indexOf( aim1 )
-  const time = body.slice( aim1idx-8, aim1idx )
-  const date = body.slice( aim1idx-21, aim1idx-11 ).split('.').reverse().join('-')
-  detailsObj.publishTime = `${date} ${time}`
-  detailsObj.card = body.slice( aim1idx + aim1.length, aim1idx + aim1.length + 4 )
+  const fatBait = `\\sпо Вашей банковской карте \\*`
+  const timestampRegex = new RegExp(`.{21}(?=${fatBait})`) //=>  /.{21}(?=\sпо Вашей банковской карте \*)/
+  const timestamp = body.match(timestampRegex)[0]
+  const [date, time] = timestamp.split(' в ')
+  const regexPlan = new Map()
+    .set(new RegExp(`(${fatBait})`), /.{4}/) //=>  /(\sпо Вашей банковской карте \*)/ /.{4}/
+    .set(/(на сумму\s)/, /.+(?=.)/)
+    .set(/(Детали платежа:\s)/, /.+(?=.<\/span>)/)
+  let rawCatch = []
+  for (const [bait, hook] of regexPlan.entries()) {
+    const regex = new RegExp(bait.source + hook.source)
+    const fish = body.match(regex)[0].replace(bait, '')
+    rawCatch = rawCatch.concat([fish])
+  }
+  const [card, spent, place] = rawCatch
+  detailsObj.publishTime = `${date.split('.').reverse().join('-')} ${time}`
   detailsObj.time = time.slice(0, 5)
-
-  const start2 = 'на сумму '
-  const end2 = '.\r'
-  const start2idx = body.indexOf( start2 )
-  const end2idx = start2idx + start2.length + 16
-  let str2 = body.slice( start2idx+start2.length, end2idx )
-  str2 = str2.slice( 0, str2.indexOf( end2 ) )
-  detailsObj.amount = str2.split(' ')[0]
-  detailsObj.currency = str2.split(' ')[1]
-
-  const start3 = 'место - '
-  const end3 = '\r'
-  const start3idx = body.indexOf( start3 )
-  const end3idx = start3idx + start3.length + 100
-  const str3 = body.slice( start3idx, end3idx )
-  detailsObj.place = str3.slice( start3.length, str3.indexOf( end3 ) ).split('"').join('')
+  detailsObj.card = card
+  detailsObj.amount = spent.split(' ')[0]
+  detailsObj.currency = spent.split(' ')[1]
+  detailsObj.place = place
 
   return detailsObj
 }
