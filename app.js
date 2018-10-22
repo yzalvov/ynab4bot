@@ -23,7 +23,7 @@ var TOKEN_PATH = TOKEN_DIR + 'gmail-nodejs-quickstart.json';
 
 
 // <<< JOB START  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-let job = schedule.scheduleJob('01 01 * * * *', () => {
+// let job = schedule.scheduleJob('01 01 * * * *', () => {
 
   // Fire up every every hour on 01th second of 01th minute
   // https://www.npmjs.com/package/node-schedule
@@ -41,7 +41,7 @@ let job = schedule.scheduleJob('01 01 * * * *', () => {
     authorize(JSON.parse(data), auth => ynb4bot(auth) )
   })
 
-})   
+// })   
 // JOB END >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
